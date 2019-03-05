@@ -3,16 +3,14 @@
 
 library(raster)
 library(sf)
-# library(rgdal)
 library(RSQLite)
-# library(maptools)
+library(snowfall)
 
 # load data, QC ----
 setwd(loc_envVars)
 
 # create a stack
-# if using TIFFs, use this line
-raslist <- list.files(pattern = ".tif$", recursive = TRUE)
+raslist <- list.files(pattern = ".tif$", recursive = FALSE)
 
 # get short names from the DB
 # first shorten names in subfolders (temporal vars). NOT FULLY TESTED, borrowed from script 3
@@ -44,6 +42,19 @@ db <- dbConnect(SQLite(),dbname=nm_db_file)
 # get MODTYPE
 SQLQuery <- paste0("SELECT MODTYPE m FROM lkpSpecies WHERE sp_code = '", model_species, "';")
 modType <- dbGetQuery(db, SQLQuery)$m
+
+# if modtype is both (B), flip it to A or T
+# what git branch are we on?
+branches <- system("git branch", intern = TRUE)
+activeBranch <- branches[grep("\\*", branches)]
+activeBranch <- sub("\\*", "", activeBranch)
+activeBranch <- gsub(" ", "", activeBranch)
+
+if(modType == "B"){
+  if(activeBranch == "terrestrial") modType <- "T"
+  if(activeBranch == "aquatic") modType <- "A"
+}
+
 
 # gridlistSub is a running list of variables to use. Uses fileName from lkpEnvVars
 SQLQuery <- paste0("SELECT gridName, fileName FROM lkpEnvVars WHERE use_",modType," = 1;")
@@ -95,13 +106,27 @@ fullL <- gridlist[tolower(justTheNames) %in% tolower(gridlistSub$fileName)]
 
 # make grid stack with subset
 envStack <- stack(fullL)
-rm(fullL, justTheNames, gridlistSub, modType)
+rm(fullL, justTheNames, gridlistSub, modType, branches, activeBranch)
 
 # extract raster data to points ----
-##  Bilinear interpolation is a *huge* memory hog. 
-##  Do it all as 'simple' 
 
-points_attributed <- extract(envStack, shpf, method="simple", sp=TRUE)
+# Extract values to a data frame - multicore approach using snowfall
+# First, convert raster stack to list of single raster layers
+s.list <- unstack(envStack)
+names(s.list) <- names(envStack)
+# Now, create a R cluster using all the machine cores minus one
+sfInit(parallel=TRUE, cpus=parallel:::detectCores()-1)
+# Load the required packages inside the cluster
+sfLibrary(raster)
+sfLibrary(sf)
+# Run parallelized 'extract' function and stop cluster
+e.df <- sfSapply(s.list, extract, y=shpf, method = "simple")
+sfStop()
+
+points_attributed <- st_sf(cbind(data.frame(shpf), data.frame(e.df)))
+
+# method without using snowfall
+#points_attributed <- extract(envStack, shpf, method="simple", sp=TRUE)
 
 # temporal variables data handling
 pa <- points_attributed
@@ -147,7 +172,9 @@ for (n in 1:length(names(points_attributed))) {
 # write it out to the att db
 dbName <- paste(baseName, "_att.sqlite", sep="")
 db <- dbConnect(SQLite(), paste0("model_input/",dbName))
-att_dat <- points_attributed@data
+att_dat <- points_attributed
+st_geometry(att_dat) <- NULL
+#att_dat <- points_attributed@data
 dbWriteTable(db, paste0(baseName, "_att"), att_dat)
 dbDisconnect(db)
 rm(db)

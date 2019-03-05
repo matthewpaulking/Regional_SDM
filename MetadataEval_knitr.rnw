@@ -17,6 +17,7 @@
 \usepackage[table,xcdraw]{xcolor}
 \usepackage{multirow}
 \usepackage{array}
+\usepackage{float}
 \newcolumntype{P}[1]{>{\centering\arraybackslash}p{#1}}
 \usepackage[normalem]{ulem}
 \useunder{\uline}{\ul}{}
@@ -72,7 +73,7 @@ Species distribution model for \Sexpr{as.character(ElementNames$CommName)} (\tex
 @
   \begin{center}
   \includegraphics{figure/thermometer1-1.pdf} \\ %place it
-  ability to find new sites \end{center}
+  validation success \end{center}
 \end{minipage}  
 
 \smallskip
@@ -330,13 +331,15 @@ Table 3. Thresholds {\protect\NoHyper\cite{LiuEtAl2005, LiuEtAl2015}\protect\end
 All SDMs are sensitive to data inputs and methodological choices. Table 4 presents scoring of modeling factors based on the model evaluation rubric presented in Sofaer et al. 2019 {\protect\NoHyper\cite{SofaerEtAl2019}\protect\endNoHyper}. \Sexpr{as.character(project_blurb)}
 \\
 \smallskip
-\small
-\noindent Table 4. Model evaluation results based on Sofaer et al. 2019. Scores can be attributed as ideal, acceptable, or problematic.
+\pagebreak
+
+
+\noindent Table 4. Model evaluation results based on Sofaer et al. 2019. Scores can be attributed as ideal, acceptable, or interpret with caution.
 \normalsize
-\begin{table}[h]
+\begin{table}[H]
 \small
 \centering
-\begin{tabular}{m{4cm}m{5cm}P{2cm}m{4.5cm}}
+\begin{tabular}{m{2.8cm}m{5cm}P{2cm}m{5.7cm}}
 \hline
 Category & Metric & Score & Notes 
 \\ \hline
@@ -353,7 +356,7 @@ Category & Metric & Score & Notes
   & \Sexpr{as.character(sdm.modeluse$spdata_eval)} 
   & \Sexpr{as.character(sdm.modeluse$spdata_evalNotes)} 
 \\ \hline
-\multirow{2}{*}{Environmental Predictors} 
+\multirow{2}{2.8cm}{Environmental Predictors} 
   & Ecological and predictive relevance 
   & \Sexpr{as.character(sdm.modeluse$envvar_relevance)} 
   & \Sexpr{as.character(sdm.modeluse$envvar_relevanceNotes)} 
@@ -386,7 +389,7 @@ Category & Metric & Score & Notes
 \multirow{3}{*}{Model Products} 
   & Mapped products 
   & \Sexpr{as.character(sdm.modeluse$products_mapped)} 
-  & \\Sexpr{as.character(sdm.modeluse$products_mappedNotes)} 
+  & \Sexpr{as.character(sdm.modeluse$products_mappedNotes)} 
 \\ \cline{2-4}
   & Interpretation support products 
   & \Sexpr{as.character(sdm.modeluse$products_support)} 
@@ -417,37 +420,56 @@ if(nrow(sdm.customComments.subset) > 0){
 \begin{center}
 
 <<mapFig, fig.width=7, fig.height=8, include=FALSE, echo=FALSE>>=
-par(mar=c(0,0,4.5,0), xpd = F, cex=0.9, adj = 0.05)
+#par(mar=c(0,0,4.5,0), xpd = F, cex=0.9, adj = 0.05)
 nclr <- 5
 clrs <- brewer.pal('Blues',n=nclr)
-# myTheme=rasterTheme(region=brewer.pal('Blues', n=nclr))
-# levelplot(ras, margin=FALSE, at=(0:10)/10, par.settings=rasterTheme(region=brewer.pal('Blues',n=9)), scales=list(draw = FALSE),xlim=c( 1000000, 2300000),ylim=c(1500000, 3100000)) + layer(sp.polygons(referenceBoundaries,lwd=0.05,col='gray')) + layer(sp.polygons(studyAreaExtent,lwd=1, col='red'))
 
-# levelplot(ras, margin=FALSE, at=(0:10)/10, par.settings=myTheme, scales=list(draw = FALSE),xlim=c(as.vector(studyAreaExtent@bbox[1,1])-10000,as.vector(studyAreaExtent@bbox[1,2])+10000),ylim=c(as.vector(studyAreaExtent@bbox[2,1])-10000,as.vector(studyAreaExtent@bbox[2,2])+10000)) + layer(sp.polygons(referenceBoundaries,lwd=0.4,col='gray50'), data=list(referenceBoundaries=referenceBoundaries)) + layer(sp.polygons(studyAreaExtent,lwd=1, col='red'), data = list(studyAreaExtent=studyAreaExtent))
+# figure out size of study area, expand if less than 100km across
+bbox <- bb(studyAreaExtent)
+studyAreaWidth <- bbox$xmax - bbox$xmin
+studyAreaHeight <- bbox$ymax - bbox$ymin
+if(studyAreaWidth < 100000){
+  bbox <- bb(bbox, width = 100000, relative = FALSE)
+  }
+if(studyAreaHeight < 100000){
+  bbox <- bb(bbox, height = 100000, relative = FALSE)
+  }
 
-# set up plot
-plot(st_geometry(studyAreaExtent), axes = F, col = NA, border = NA)
-plot(st_geometry(referenceBoundaries), add = T, border = "grey80")
-legend(par('usr')[2], par('usr')[4], legend = rev(c("Low Habitat Suitability", 
-                                 rep("               |               ", nclr-2), "High Habitat Suitability")),
-       fill = rev(clrs), border = rev(clrs), cex=0.8, bg = "white", xpd = NA, xjust = 1, yjust = 0)
-title(main = paste0(as.character(ElementNames[[2]]), " (", as.character(ElementNames[[1]]), "): \n    SDM Habitat Suitability Predictions"), cex.main = 1.1)
-box()
-box(which = "outer")
-# need to plot raster after legend, title, box, otherwise it messes up margins
-plot(ras, maxpixels = 500000, col = clrs, axes = F, add = T, legend = F)
-plot(st_geometry(studyAreaExtent), border = "red", lwd = 2, add = T)
+
+tmap_options(max.raster = c("plot" = 300000, "view" = 100000))
+tmap_mode("plot")
+###get the basemap
+# for basemap options see http://leaflet-extras.github.io/leaflet-providers/preview/
+# for native options provided by read_osm, see ?OpenStreetMap::openmap
+## this is stamen-toner
+#basetiles <- read_osm(studyAreaExtent, type = "stamen-toner", ext = 1.1)
+
+## this is Esri.WorldGrayCanvas
+#mtype <- 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}.png?'
+
+## this is CartoDB.Positron
+mtype <- 'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
+basetiles <- read_osm(bbox, type = mtype, ext = 1.1)
+# plot it
+qtm(basetiles) + 
+  tm_shape(ras) + 
+    tm_raster(palette = clrs, title = "modeled suitability",
+            labels = c("Low Habitat Suitability", rep(" ", nclr-2), "High Habitat Suitability")) +   tm_shape(referenceBoundaries) +
+    tm_borders(col = "grey", lwd = 1) + 
+  tm_shape(studyAreaExtent) + 
+    tm_borders(col = "red", lwd = 2) + 
+  tm_compass(north = 0, type = "arrow", position = c("left","bottom")) + 
+  tm_scale_bar()
+
 @
 \includegraphics{figure/mapFig-1.pdf}    
 \end{center}
-\noindent
-\small
-Figure 4. A generalized view of the model predictions throughout the modeled. State boundaries are shown in gray. The modeled area is outlined in red. 
+Figure 4. A generalized view of the model predictions throughout the modeled area. State boundaries are depicted as a thin gray line. The modeled area is outlined in red. Basemap: CartoDB.Positron (\copyright  \href{https://www.openstreetmap.org/copyright}{OpenStreetMap}, contributors: \copyright  \href{https://carto.com/attributions}{CARTO}).
 
 \normalsize
 \pagebreak
 
-This distribution model would not have been possible without data sharing among organizations. The following organizations provided data:
+This distribution model would not have been possible without data sharing among organizations. The following organizations provided data that were evaluated for inclusion into this model:
 \begin{itemize}
     \setlength{\itemsep}{0pt}
     \setlength{\parskip}{0pt}
@@ -457,14 +479,13 @@ for(i in 1:length(sdm.dataSources$ProgramName)){
   x <- paste("\\item ", sdm.dataSources$ProgramName[[i]], "\n", sep = "")
   y <- sub("&", "\\\\&", x) #escape ampersands if there are any - special character in latex
   cat(y)
-  #cat(paste("\\item ", sdm.dataSources$ProgramName[[i]], "\n", sep = ""))
 }
 @
 \end{itemize}
 
 \medskip
 \noindent
-This model was built using a methodology developed through collaboration among the Florida Natural Areas Inventory, the New York Natural Heritage Program, the Pennsylvania Natural Heritage Program, and the Virginia Natural Heritage Program, all member programs of the NatureServe Network. It is one of a suite of aquatic species distribution models developed using the same methods, scripts, and environmental data sets. Our goal was to be consistent and transparent in our methodology, validation, and output.
+This model was built using a methodology developed through collaboration among the Florida Natural Areas Inventory, the New York Natural Heritage Program, the Pennsylvania Natural Heritage Program, and the Virginia Natural Heritage Program, all member programs of the NatureServe Network. It is one of a suite of species distribution models developed using the same methods, scripts, and environmental data sets. Our goal was to be consistent and transparent in our methodology, validation, and output.
 
 \medskip
 \noindent
@@ -552,6 +573,7 @@ Appendix 2. Model details for reproducibility
     \setlength{\parsep}{0pt}
   \item{All R Scripts are available at \href{https://github.com/HeritageNetwork/Regional_SDM}{github}}
   \item{The repository version (repo head) used for this run was: \Sexpr{modelrun_meta_data$repo_head}}
+  \item{Validation metrics requiring a threshold use maxSSS\cite{LiuEtAl2015}}
   \item{R version: \Sexpr{modelrun_meta_data$r_version}}
   \item{Random seed for full randomForest model: \Sexpr{modelrun_meta_data$seed}}
   \item{randomForest mtry: \Sexpr{rf.full$mtry}}
