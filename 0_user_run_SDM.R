@@ -7,8 +7,12 @@ rm(list=ls())
 # Step 1: Setting for the model run
 
 # species code (from lkpSpecies in modelling database. This will be the new folder name containing inputs/ouptuts)
-model_species <- "pletasup"
 
+<<<<<<< HEAD
+model_species <- "rhynknie"
+=======
+model_species <- "pletasup"
+>>>>>>> 6e3dc725ef659f0ad15ebf8295e5aeff31ec5a5e
 # loc_scripts is your repository. Make sure your git repository is set to correct branch
 loc_scripts <- here()
 # The main modelling folder for inputs/outputs. All sub-folders are created during the model run (when starting with step 1)
@@ -18,9 +22,9 @@ nm_db_file <- here("_data", "databases", "SDM_lookupAndTracking.sqlite")
 # locations file (presence reaches). Provide full path; File is copied to modeling folder and timestamped.
 nm_presFile <- here("_data", "occurrence", paste0(model_species, ".shp"))
 # env vars location [Terrestrial-only variable]
-loc_envVars = here("_data","env_vars","raster", "ras")
+loc_envVars = here("_data","env_vars","raster", "ras330")
 # Name of background/envvars sqlite geodatabase, and base table name (2 length vector)
-nm_bkgPts <- c(here("_data","env_vars","tabular", "background_pletasup.sqlite"), "background_pts")
+nm_bkgPts <- c(here("_data","env_vars","tabular", "background_CONUS.sqlite"), "background_pts")
 
 # HUC spatial data set (shapefile) that is subsetted and used to define modeling area//range
 nm_HUC_file <- here("_data","other_spatial","feature","HUC10.shp")
@@ -37,14 +41,14 @@ model_comments = ""
 metaData_comments = ""
 
 # your name
-modeller = "Tim Howard"
+modeller = "Amy Conley"
 
 # list non-standard variables to add to model run
 add_vars = NULL
 # list standard variables to exclude from model run
 remove_vars = NULL
 # do you want to stop execution after each modeling step (script)?
-prompt = FALSE
+prompt = TRUE
 
 project_blurb = "Models developed for the MoBI project are intended to inform creation of a national map of biodiversity value, and we recommend additional refinement and review before these data are used for more targeted, species-specific decision making. In particular, many MoBI models would benefit from greater consideration of species data and environmental predictor inputs, a more thorough review by species experts, and iteration to address comments received."
 
@@ -78,7 +82,7 @@ run_SDM(
   remove_vars = remove_vars,
   #rubric_default = rubric_default,
   project_blurb = project_blurb,
-  prompt = prompt
+  prompt =FALSE
 )
 
 #############################################################################
@@ -106,7 +110,7 @@ library(here)
 rm(list=ls())
 
 # set project folder and species code for this run
-model_species <- "amazviri"
+model_species <- "geumpeck"
 loc_model <- here("_data", "species")
 
 # set wd and load function
@@ -119,22 +123,20 @@ source(here("helper", "run_SDM.R"))
   # to add/remove variables, begin at step 2
   # to just run new model, begin at step 3 (see next example)
 run_SDM(
-  begin_step = "4c",
-  model_species = "amazviri",
-  loc_model = loc_model,
-  model_rdata = max(list.files(here("_data","species",model_species,"outputs","rdata")))
+  begin_step = "3",
+  model_species = "callirus",
+  loc_model = loc_model
 )
-
 
 
 
 # example pick-up a model run at step 5 (metadata create)
   # if starting at step 4 or later, must provide model run name to model_rdata
 run_SDM(
-  begin_step = "5",
-  model_species = "chrocumb",
+  begin_step = "4",
+  model_species = "geumpeck",
   loc_model = loc_model,
-  model_rdata = "chrocumb_20190116_142650",
+  model_rdata = "geumpeck_20190409_155720",
   metaData_comments = "This is an updated comment that will appear in the metadata PDF."
 )
 
@@ -144,12 +146,12 @@ run_SDM(
 # if starting at step 4 or later, must provide model run name to model_rdata
 run_SDM(
   begin_step = "4c",
-  model_species = "chrocumb",
+  model_species = "dichhirs",
   loc_model = loc_model,
   #rubric_default = rubric_default,
-  model_rdata = "chrocumb_20190108_143402",
-  model_comments = "Testing out model model comments.",
-  metaData_comments = "This is an updated comment that will appear in the metadata PDF."
+  model_rdata <- max(list.files(here("_data","species",model_species,"outputs","rdata"))),
+  model_comments = "",
+  metaData_comments = ""
 )
 
 ########## 
@@ -164,7 +166,12 @@ rm(list=ls())
 # so you need to have started a run_SDM() run in step 2 first.
 
 # for scripts 1-3, run just the following 3 lines
+<<<<<<< HEAD
+
+model_species <- "geumpeck"
+=======
 model_species <- "pletasup"
+>>>>>>> 6e3dc725ef659f0ad15ebf8295e5aeff31ec5a5e
 load(here("_data","species",model_species,"runSDM_paths.Rdata"))
 for(i in 1:length(fn_args)) assign(names(fn_args)[i], fn_args[[i]])
 
