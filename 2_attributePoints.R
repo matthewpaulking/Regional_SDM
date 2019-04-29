@@ -25,11 +25,7 @@ shrtNms <- merge(data.frame(fileName = raslist.short, fullname = raslist, string
 dbDisconnect(db)
 
 gridlist <- as.list(paste(loc_envVars,shrtNms$fullname,sep = "/"))
-#nm <- substr(shrtNms$fullname,1,nchar(shrtNms$fullname) - 4) # remove .tif extension
-names(gridlist) <- shrtNms$fullname
-
-gridlist <- gridlist[order(names(gridlist))]
-names(gridlist) <- shrtNms[order(shrtNms$fileName),"gridName"]
+names(gridlist) <- shrtNms$gridName
 
 nulls <- gridlist[is.na(names(gridlist))]
 if(length(nulls) > 0){
@@ -120,7 +116,7 @@ rm(fullL, gridlistSub, modType, branches, activeBranch)
 s.list <- unstack(envStack)
 names(s.list) <- names(envStack)
 # Now, create a R cluster using all the machine cores minus one
-sfInit(parallel=TRUE, cpus=parallel:::detectCores()-1)
+sfInit(parallel=TRUE, cpus=parallel:::detectCores()-3)
 # Load the required packages inside the cluster
 sfLibrary(raster)
 sfLibrary(sf)
@@ -172,7 +168,7 @@ db <- dbConnect(SQLite(), paste0("model_input/",dbName))
 att_dat <- points_attributed
 st_geometry(att_dat) <- NULL
 #att_dat <- points_attributed@data
-dbWriteTable(db, paste0(baseName, "_att"), att_dat)
+dbWriteTable(db, paste0(baseName, "_att"), att_dat, overwrite = TRUE)
 dbDisconnect(db)
-rm(db)
+rm(db, SQLQuery)
 

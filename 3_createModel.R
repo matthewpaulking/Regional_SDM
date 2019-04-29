@@ -14,7 +14,7 @@ library(randomForest)
 library(iterators)
 library(doParallel)
 
-source(paste0(loc_scripts, "/helper/modelrun_meta_data.R"), local = T) # generates modelrun_meta_data
+source(paste0(loc_scripts, "/helper/modelrun_meta_data.R"), local = FALSE) # generates modelrun_meta_data
 
 setwd(loc_model)
 dir.create(paste0(model_species,"/outputs/rdata"), recursive = T, showWarnings = F)
@@ -31,17 +31,18 @@ df.in <- dbReadTable(db, tableName)
 tableName <- paste0(nm_bkgPts[2], "_clean")
 df.abs <- dbReadTable(db, tableName)
 dbDisconnect(db)
-
-# write model input data to database before any other changes made
-db <- dbConnect(SQLite(),dbname=nm_db_file)
+rm(db, dbName, tableName)
 
 # set the seed before validation loops
 set.seed(seed)
 
+# connect to DB ..
+db <- dbConnect(SQLite(),dbname=nm_db_file)
 # get species info
 SQLquery <- paste("SELECT scientific_name SciName, common_name CommName, sp_code Code, broad_group Type, egt_id, g_rank, rounded_g_rank FROM lkpSpecies WHERE sp_code = '", model_species,"';", sep="")
 ElementNames <- as.list(dbGetQuery(db, statement = SQLquery)[1,])
 
+# write model input data to database before any other changes made
 tblModelInputs <- data.frame(table_code = baseName, EGT_ID = NA, datetime = as.character(Sys.time()),
                              feat_count = length(unique(df.in$stratum)), 
                              feat_grp_count = length(unique(df.in$group_id)), 
@@ -57,7 +58,7 @@ SQLquery <- "SELECT gridName, correlatedVarGroupings FROM lkpEnvVars WHERE corre
 corrdEVs <- dbGetQuery(db, statement = SQLquery)
 
 dbDisconnect(db)
-rm(db)
+rm(db, SQLquery)
 
 # are we using the 330 m raster set? if so, rename df.abs
 # all 330m raster names begin with "z3"
@@ -99,7 +100,7 @@ names(df.abs) <- tolower(names(df.abs))
 raslist <- list.files(path = loc_envVars, pattern = ".tif$", recursive = TRUE)
 
 # get short names from the DB
-# first shorten names in subfolders (temporal vars). NOT FULLY TESTED
+# first shorten names in subfolders (temporal vars).
 raslist.short <- unique(unlist(
   lapply(strsplit(raslist, "/"), function(x) {x[length(x)]})
 ))
@@ -124,7 +125,7 @@ dtGrids <- dbGetQuery(db, statement = SQLquery)
 # clean up
 #options(op)
 dbDisconnect(db)
-rm(db)
+rm(db, SQLQuery, SQLquery, shrtNms)
 
 # Remove irrelevant distance-to grids ----
 # check if pres points are VERY far away from any of the dist-to grids
@@ -138,6 +139,8 @@ dtRas.min <- apply(as.data.frame(df.in[,dtRas]), 2, min)
 # remove those whose closest distance is greater than 10km
 dtRas.sub <- dtRas.min[dtRas.min > 5000]
 rasnames <- rasnames[!rasnames %in% names(dtRas.sub)]
+
+rm(dtRas, dtRas.min, dtRas.sub)
 
 # clean up, merge data sets -----
 # this is the full list of fields, arranged appropriately
@@ -183,10 +186,13 @@ EObySS$sampSize[EObySS$group_id == "pseu-a"] <- sum(EObySS[!EObySS$group_id == "
 
 sampSizeVec <- EObySS$sampSize
 names(sampSizeVec) <- as.character(EObySS$group_id)
+rm(EObySS, EObyRA)
+
 # reset sample sizes to number of points, when it is smaller than desired sample size
 # This is only relevant when complete.cases may have removed some points from an already-small set of points
 totPts <- table(df.full$group_id)
 for (i in names(sampSizeVec)) if (sampSizeVec[i] > totPts[i]) sampSizeVec[i] <- totPts[i]
+rm(totPts)
 
 ##
 # tune mtry ----
@@ -197,6 +203,9 @@ if(rowCounts["0"] > (10 * rowCounts["1"])){
   tuneAbs <- df.full[df.full$pres == 0, ]
   tuneAbs <- tuneAbs[sample(nrow(tuneAbs), nrow(tunePres)* 10),]
   df.tune <- rbind(tunePres, tuneAbs)
+  rm(tuneAbs, tunePres)
+} else {
+  df.tune <- df.full
 }
 # run through mtry twice
 x <- tuneRF(df.tune[,indVarCols],
@@ -212,7 +221,7 @@ y <- tuneRF(df.tune[,indVarCols],
             strata = df.full$group_id, sampsize = sampSizeVec, replace = TRUE)
 
 mtry <- max(y[y[,2] == min(y[,2]),1])
-rm(x,y, tunePres, tuneAbs, df.tune, rowCounts)
+rm(x,y, df.tune, rowCounts, newTry)
 
 ## old way if speed is not critical
 # x <- tuneRF(df.full[,indVarCols],
@@ -281,6 +290,8 @@ impEnvVarCols[1:5] <- TRUE
 df.full <- df.full[,impEnvVarCols]
 # reset the indvarcols object
 indVarCols <- c(6:length(names(df.full)))
+
+rm(impvals, impEnvVars, impEnvVarCols)
 
 ##
 # code above is for removing least important env vars
@@ -403,7 +414,7 @@ if(length(group$vals)>1){
 		  # re-calc pseudo-absence samples to match input training samples
 		  ssVec["pseu-a"] <- sum(ssVec[!names(ssVec) %in% "pseu-a"])
 		  
-		  rm(trSetBG, evSetBG)
+		  rm(trSelStr, evSelStr, trSetBG, evSetBG, TrBGsamps, BGsampSz )
 
 		  trRes[[i]] <- foreach(ntree = rep(treeSubs,numCores), .combine = randomForest::combine, 
 		                        .packages = 'randomForest', .multicombine = TRUE) %dopar%
@@ -442,7 +453,7 @@ if(length(group$vals)>1){
 	v.rocr.rocplot.restruct <- performance(v.rocr.pred.restruct, "tpr","fpr")
 	# send it to perf for the averaging lines that follow
 	perf <- v.rocr.rocplot.restruct
-
+  rm(v.rocr.rocplot.restruct)
 	## for infinite cutoff, assign maximal finite cutoff + mean difference
 	## between adjacent cutoff pairs  (this code is from ROCR)
 	if (length(perf@alpha.values)!=0) perf@alpha.values <-
@@ -597,6 +608,7 @@ treeSubs <- ntrees/numCores
 ####
 #   run the full model ----
 ####
+cat("... creating full model \n")
 
 rf.full <- foreach(ntree = rep(treeSubs,numCores), .combine = randomForest::combine, 
                     .packages = 'randomForest', .multicombine = TRUE) %dopar% {
@@ -643,14 +655,22 @@ if(length(ord) > 9){
 
 cat("... calculating partial plots \n")
 
-### subsampling used in aquatic branch, should sample by group before being applied here.
-#pplotSamp <- min(c(nrow(df.full)/10, 10000)) # take 10% of samples, or 10000, whichever is less
-#pplotSamp <- sample(1:nrow(df.full), size = round(pplotSamp), replace = FALSE)
+### subsample, grouped by pres/abs, to speed up partial plots
+ppPres <- df.full[df.full$pres == 1, ]
+ppAbs <- df.full[df.full$pres == 0, ]
+ppPresSamp <- min(c(nrow(ppPres), 6000)) # take all pres samples, or 6000, whichever is less
+ppPresSamp <- sample(1:nrow(ppPres), size = round(ppPresSamp), replace = FALSE)
+ppPresSamp <- ppPres[ppPresSamp,]
+ppAbsSamp <- min(c(nrow(ppAbs), 6000)) # take all abs samples, or 6000, whichever is less
+ppAbsSamp <- sample(1:nrow(ppAbs), size = round(ppAbsSamp), replace = FALSE)
+ppAbsSamp <- ppAbs[ppAbsSamp,]
+
+ppPreddata <- rbind(ppPresSamp, ppAbsSamp)
 
 # run partial plots in parallel
 curvars = names(f.imp[ord])[1:pPlotListLen]
 pPlots <- foreach(i = iter(curvars), .packages = 'randomForest') %dopar% {
-                  do.call("partialPlot", list(x = rf.full, pred.data = df.full[,indVarCols],
+                  do.call("partialPlot", list(x = rf.full, pred.data = ppPreddata[,indVarCols],
                               x.var = i,
                               which.class = 1,
                               plot = FALSE))
@@ -662,19 +682,14 @@ for(i in 1:length(pPlots)){
   pPlots[[i]]$gridName <- curvars[[i]]
   pPlots[[i]]$fname <- EnvVars$fullName[ord[i]]
 }
-
-### this might be faster (uses parallel to create partial instead of parallel to distribute pplot creating)
-### but plots may be opposite, need to spend time figuring that out
-# library(pdp)
-# x <- partial(rf.full, pred.var = curvars[[1]], 
-#              train = df.full[,c(depVarCol,indVarCols)], parallel = TRUE, paropts = list(.packages = "randomForest"))
-# plotPartial(x)
-# 
+rm(ppPres, ppAbs, ppPresSamp, ppAbsSamp, ppPreddata)
 
 stopCluster(cl)
+rm(cl)
+closeAllConnections()
 
 # save the project, return to the original working directory
-dir.create(paste0(loc_model, "/", model_species,"/outputs/rdata"), recursive = T, showWarnings = F)
+dir.create(paste0(loc_model, "/", model_species,"/outputs/rdata"), recursive = TRUE, showWarnings = FALSE)
 setwd(paste0(loc_model, "/", model_species,"/outputs"))
 
 # don't save fn args/vars
@@ -701,3 +716,16 @@ dbWriteTable(db, "tblModelResultsVarsUsed", varImpDB, append = T)
 dbDisconnect(db)
 
 message(paste0("Saved rdata file: '", model_run_name , "'."))
+
+### this isn't needed but keeping for a bit in one script in case we decide otherwise
+#serious cleanup
+# if(isNamespaceLoaded("doParallel")) unloadNamespace("doParallel")
+# if(isNamespaceLoaded("foreach")) unloadNamespace("foreach")
+# if(isNamespaceLoaded("iterators")) unloadNamespace("iterators")
+# if(isNamespaceLoaded("parallel")) unloadNamespace("parallel")
+# if(isNamespaceLoaded("RSQLite")) unloadNamespace("RSQLite")
+# if(isNamespaceLoaded("ROCR")) unloadNamespace("ROCR")
+# if(isNamespaceLoaded("vcd")) unloadNamespace("vcd")
+# if(isNamespaceLoaded("abind")) unloadNamespace("abind")
+# if(isNamespaceLoaded("foreign")) unloadNamespace("foreign")
+# if(isNamespaceLoaded("randomForest")) unloadNamespace("randomForest")
