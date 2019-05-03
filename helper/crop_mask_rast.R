@@ -7,7 +7,7 @@ library(smoothr)
 # needs raster list (fullL), loc_envVars, model_species
 
 # has the range already been created? If so, don't waste time re-creating
-allRanges_fn <- paste0(loc_scripts, "/_data/other_spatial/feature/","Terrestrial_Ranges_dis_clip.shp")
+allRanges_fn <- paste0(loc_scripts, "/_data/other_spatial/feature/","Ranges_dissolved.gdb")
 if(file.exists(allRanges_fn)) {
   allRanges <- st_read(allRanges_fn)
   targRange <- allRanges[allRanges$EGT_ID == ElementNames$EGT_ID,]
